@@ -42,7 +42,7 @@ from sklearn.metrics import (
     classification_report,
 )
 
-# %% ── SECTION 2: CONFIG ──────────────────────────────────────────────────────
+
 SEED             = 42
 DATA_DIR         = r"D:\hackathon\data"
 ORIG_MODEL_PATH  = "models/best.pth"
@@ -82,7 +82,6 @@ os.makedirs("outputs/phase3", exist_ok=True)
 TRAIN_DIR = os.path.join(DATA_DIR, "train")
 TEST_DIR  = os.path.join(DATA_DIR, "test")
 
-# %% ── SECTION 3: LABEL FLIP & TRANSFORMS ────────────────────────────────────
 def flip_label(y):
     return 1 - y
 
@@ -132,7 +131,7 @@ val_loader = DataLoader(
     shuffle=False, num_workers=0, pin_memory=False
 )
 
-print(f"Train: {len(train_ds):,}  Val: {len(val_ds):,}  Test: {len(test_ds):,}")
+print(f"Train: {len(train_ds):,} Val: {len(val_ds):,} Test: {len(test_ds):,}")
 
 # %% ── SECTION 5: MODEL BUILDER ───────────────────────────────────────────────
 def build_model():
@@ -153,7 +152,7 @@ original_model.load_state_dict(torch.load(ORIG_MODEL_PATH, map_location=DEVICE))
 original_model.eval()
 print("Original model loaded.\n")
 
-# %% ── SECTION 7: HELPERS ─────────────────────────────────────────────────────
+
 def denorm(t):
     return (t * 0.5 + 0.5).clamp(0, 1)
 
@@ -205,7 +204,7 @@ def pgd_attack(model, img_tensor, epsilon, alpha=0.004,
         history.append(pfake)
     return ensure_3d(x_adv).cpu(), history
 
-# %% ── SECTION 9: TENSOR DATASET ──────────────────────────────────────────────
+
 class TensorListDataset(Dataset):
     """
     Wraps lists of image tensors and labels.
@@ -265,7 +264,7 @@ def eval_on_tensor_loader(model, loader, desc=""):
     return acc, f1, p, l
 
 # %% ── SECTION 11: BASELINE — ORIGINAL MODEL ─────────────────────────────────
-print("Evaluating ORIGINAL model on clean test set...")
+print("\n====== Evaluating ORIGINAL model on clean test set")
 orig_clean = evaluate_model(original_model, test_loader, "Clean Test")
 print(f"  Accuracy : {orig_clean['acc']:.4f}")
 print(f"  F1       : {orig_clean['f1']:.4f}\n")
@@ -426,7 +425,7 @@ history      = {
     "train_acc":  [], "val_acc":  []
 }
 
-print(f"\n====== Adversarial Fine-tuning ({FINETUNE_EPOCHS} epochs) ============")
+print(f"\n====== Adversarial Fine-tuning ({FINETUNE_EPOCHS} epochs)")
 
 for epoch in range(1, FINETUNE_EPOCHS + 1):
 
@@ -504,7 +503,7 @@ robust_model.eval()
 print(f"\nRobust model saved → {ROBUST_PATH}")
 
 # %% ── SECTION 16: FINAL EVALUATION ──────────────────────────────────────────
-print("\n====== Evaluating ROBUST model =====================================")
+print("\n====== Evaluating ROBUST model")
 
 print("  Clean test set...")
 rob_clean = evaluate_model(robust_model, test_loader, "Clean Test (Robust)")
@@ -735,9 +734,9 @@ WHY THIS WORKS:
   This is the standard approach used in real-world robust classifiers.
 """)
 
-print("====== RESULTS SUMMARY =============================================")
-print(f"{'Condition':<25} {'Orig Acc':>10} {'Robust Acc':>11} {'Improvement':>13}")
-print("-" * 63)
+print("RESULTS SUMMARY")
+print(f"Condition Orig Acc Robust Acc Improvement")
+print("-" * 50)
 for name, o, r in [
     ("Clean Test Set",   orig_clean["acc"], rob_clean["acc"]),
     ("PGD Adversarial",  orig_pgd_acc,      rob_pgd_acc),
@@ -747,8 +746,8 @@ for name, o, r in [
     sign = "+" if d >= 0 else ""
     print(f"  {name:<23} {o*100:>9.2f}%  {r*100:>9.2f}%  {sign}{d*100:>10.2f}%")
 
-print("\n====== OUTPUT FILES =================================================")
+print("\n====== OUTPUT FILES")
 for f in sorted(os.listdir("outputs/phase3")):
     print(f"  outputs/phase3/{f}")
 
-print("\n====== PHASE 3 COMPLETE ============================================")
+print("\n====== PHASE 3 COMPLETE")

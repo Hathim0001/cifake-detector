@@ -1,16 +1,7 @@
 # =============================================================================
-# Phase 1 — Build & Evaluate: Synthetic Image Detector
-# Build → Break → Improve | CIFAKE Dataset | ResNet-18 Transfer Learning
-# Fixes applied:
-#   - flip_label as named function (Windows multiprocessing pickle fix)
-#   - num_workers=0, pin_memory=False (Windows compatibility)
-#   - Absolute DATA_DIR path
-#   - BATCH_SIZE=32 for CPU training
-# =============================================================================
-
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 1: IMPORTS
-# ─────────────────────────────────────────────────────────────────────────────
+# Phase 1 Build & Evaluate: Synthetic Image Detector
+# CIFAKE Dataset ResNet-18 Transfer Learning
+#
 import os
 import random
 from copy import deepcopy
@@ -35,30 +26,24 @@ from sklearn.metrics import (
     classification_report,
 )
 
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 2: CONFIG & SEED
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ── Reproducibility ──────────────────────────────────────────────────────────
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 torch.cuda.manual_seed_all(SEED)
 
-# ── Device ───────────────────────────────────────────────────────────────────
+
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using Device: {DEVICE}")
 
-# ── Config ───────────────────────────────────────────────────────────────────
-DATA_DIR    = r"D:\hackathon\data"   # train/ and test/ are directly inside
-BATCH_SIZE  = 32                     # smaller for CPU
-EPOCHS_S1   = 5                      # Stage 1: head only
-EPOCHS_S2   = 5                      # Stage 2: full fine-tune
+DATA_DIR    = r"D:\hackathon\data"
+BATCH_SIZE  = 32
+EPOCHS_S1   = 5
+EPOCHS_S2   = 5
 LR_HEAD     = 1e-3
 LR_BACKBONE = 1e-4
 VAL_SPLIT   = 0.15
-IMG_SIZE    = 64                     # upsample 32x32 → 64x64 for ResNet
+IMG_SIZE    = 64
 PATIENCE    = 3
 SAVE_PATH   = "models/best.pth"
 
@@ -80,14 +65,13 @@ def flip_label(y):
 TRAIN_DIR = os.path.join(DATA_DIR, "train")
 TEST_DIR  = os.path.join(DATA_DIR, "test")
 
-print("\nPath Check:")
 for path in [DATA_DIR, TRAIN_DIR, TEST_DIR,
              os.path.join(TRAIN_DIR, "REAL"),
              os.path.join(TRAIN_DIR, "FAKE"),
              os.path.join(TEST_DIR,  "REAL"),
              os.path.join(TEST_DIR,  "FAKE")]:
     status = "OK" if os.path.exists(path) else "MISSING"
-    print(f"  [{status}]  {path}")
+    print(f"[{status}] {path}")
 
 for folder in [os.path.join(TRAIN_DIR, "REAL"), os.path.join(TRAIN_DIR, "FAKE"),
                os.path.join(TEST_DIR,  "REAL"), os.path.join(TEST_DIR,  "FAKE")]:
@@ -96,11 +80,7 @@ for folder in [os.path.join(TRAIN_DIR, "REAL"), os.path.join(TRAIN_DIR, "FAKE"),
                      if f.lower().endswith((".png", ".jpg", ".jpeg"))])
         label = os.path.basename(folder)
         split = os.path.basename(os.path.dirname(folder))
-        print(f"         {split}/{label}: {count:,} images")
-
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 4: TRANSFORMS & DATASET LOADING
-# ─────────────────────────────────────────────────────────────────────────────
+        print(f"{split}/{label}: {count:,} images")
 
 train_transform = T.Compose([
     T.Resize((IMG_SIZE, IMG_SIZE)),
@@ -116,9 +96,6 @@ eval_transform = T.Compose([
     T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
 ])
 
-# Two ImageFolders of same train dir:
-#   augmented version  → used for training Subset
-#   clean version      → used for validation Subset
 full_train_aug  = datasets.ImageFolder(
     TRAIN_DIR, transform=train_transform, target_transform=flip_label
 )
@@ -156,14 +133,10 @@ test_loader = DataLoader(
     num_workers=0, pin_memory=False
 )
 
-print(f"\nDataset Splits:")
-print(f"  Train : {len(train_ds):,}")
-print(f"  Val   : {len(val_ds):,}")
-print(f"  Test  : {len(test_ds):,}")
-
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 5: VISUALIZE SAMPLE IMAGES
-# ─────────────────────────────────────────────────────────────────────────────
+print(f"Dataset Splits:")
+print(f"Train : {len(train_ds):,}")
+print(f"Val   : {len(val_ds):,}")
+print(f"Test  : {len(test_ds):,}")
 
 def denorm(tensor):
     """Reverse normalization [-1,1] → [0,1] for display."""
@@ -195,9 +168,6 @@ def show_samples(loader, n=8, title="Dataset Samples"):
 show_samples(train_loader, title="Training Samples")
 show_samples(test_loader,  title="Test Samples")
 
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 6: MODEL — ResNet-18 with Custom Classifier Head
-# ─────────────────────────────────────────────────────────────────────────────
 
 def build_model(freeze_backbone=True):
     """
@@ -227,14 +197,10 @@ model = build_model(freeze_backbone=True)
 
 trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
 total     = sum(p.numel() for p in model.parameters())
-print(f"\nModel: ResNet-18")
-print(f"  Trainable params : {trainable:,}")
-print(f"  Total params     : {total:,}")
-print(f"  Head             : {model.fc}")
-
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 7: TRAINING UTILITIES
-# ─────────────────────────────────────────────────────────────────────────────
+print(f"Model: ResNet-18")
+print(f"Trainable params : {trainable:,}")
+print(f"Total params     : {total:,}")
+print(f"Head: {model.fc}")
 
 criterion = nn.CrossEntropyLoss()
 
@@ -345,12 +311,12 @@ def train_model(model, train_loader, val_loader, epochs, stage=1):
 # SECTION 8: TRAIN — Stage 1 then Stage 2
 # ─────────────────────────────────────────────────────────────────────────────
 
-print("\n====== Stage 1: Classifier Head Only ==============================")
+print(f"\nStage 1: Classifier Head Only <=====")
 model, hist_s1 = train_model(
     model, train_loader, val_loader, epochs=EPOCHS_S1, stage=1
 )
 
-print("\n====== Stage 2: Fine-tune Full Network ============================")
+print(f"\nStage 2: Fine-tune Full Network <=====")
 for param in model.parameters():
     param.requires_grad = True          # unfreeze backbone
 
@@ -358,9 +324,6 @@ model, hist_s2 = train_model(
     model, train_loader, val_loader, epochs=EPOCHS_S2, stage=2
 )
 
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 9: TRAINING CURVES
-# ─────────────────────────────────────────────────────────────────────────────
 
 def plot_history(h, title="Training History"):
     eps  = range(1, len(h["train_loss"]) + 1)
@@ -416,28 +379,23 @@ rec  = recall_score   (all_labels, all_preds, pos_label=1, zero_division=0)
 f1   = f1_score       (all_labels, all_preds, pos_label=1, zero_division=0)
 cm   = confusion_matrix(all_labels, all_preds)
 
-print("\n====== Test Set Metrics ===========================================")
-print(f"  Accuracy  : {acc:.4f}  ({acc * 100:.2f}%)")
-print(f"  Precision : {prec:.4f}")
-print(f"  Recall    : {rec:.4f}")
-print(f"  F1 Score  : {f1:.4f}")
-print("\n  Full Classification Report:")
+print(f"\nTest Set Metrics")
+print(f"Accuracy: {acc:.4f} ({acc * 100:.2f}%)")
+print(f"Precision: {prec:.4f}")
+print(f"Recall: {rec:.4f}")
+print(f"F1 Score: {f1:.4f}")
+print("\nFull Classification Report:")
 print(classification_report(all_labels, all_preds, target_names=CLASS_NAMES))
 
 # ── Confusion Matrix ─────────────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(5, 4))
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=CLASS_NAMES)
 disp.plot(ax=ax, colorbar=False, cmap="Blues")
-ax.set_title("Confusion Matrix — Test Set", fontsize=12, fontweight="bold")
+ax.set_title("Confusion Matrix Test Set", fontsize=12, fontweight="bold")
 plt.tight_layout()
 plt.savefig("outputs/confusion_matrix.png", dpi=150)
 plt.show()
 print("Saved: outputs/confusion_matrix.png")
-
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 11: GRAD-CAM IMPLEMENTATION
-# Shows WHICH REGIONS of the image influenced the model's decision.
-# ─────────────────────────────────────────────────────────────────────────────
 
 class GradCAM:
     """
@@ -547,10 +505,6 @@ def visualize_gradcam(loader, n=6, label_filter=None, save_tag="gradcam"):
 visualize_gradcam(test_loader, n=6, label_filter=1, save_tag="gradcam_fake")
 visualize_gradcam(test_loader, n=6, label_filter=0, save_tag="gradcam_real")
 
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 12: SALIENCY MAPS
-# Shows WHICH PIXELS most influence the model's prediction.
-# ─────────────────────────────────────────────────────────────────────────────
 
 def compute_saliency(model, img_tensor):
     """
@@ -620,16 +574,12 @@ def visualize_saliency(loader, n=6, label_filter=None, save_tag="saliency"):
 visualize_saliency(test_loader, n=6, label_filter=1, save_tag="saliency_fake")
 visualize_saliency(test_loader, n=6, label_filter=0, save_tag="saliency_real")
 
-# %% ──────────────────────────────────────────────────────────────────────────
-# SECTION 13: FINAL SUMMARY
-# ─────────────────────────────────────────────────────────────────────────────
-
-print("\n====== PHASE 1 COMPLETE ============================================")
-print(f"  Accuracy  : {acc:.4f}  ({acc * 100:.2f}%)")
-print(f"  Precision : {prec:.4f}")
-print(f"  Recall    : {rec:.4f}")
-print(f"  F1 Score  : {f1:.4f}")
-print(f"\n  Model saved → {SAVE_PATH}")
-print("\n  Output files:")
+print("PHASE 1 COMPLETE")
+print(f"Accuracy: {acc:.4f} ({acc * 100:.2f}%)")
+print(f"Precision: {prec:.4f}")
+print(f"Recall: {rec:.4f}")
+print(f"F1 Score: {f1:.4f}")
+print(f"Model saved to {SAVE_PATH}")
+print("Output files:")
 for f in sorted(os.listdir("outputs")):
-    print(f"    outputs/{f}")
+    print(f"outputs/{f}")

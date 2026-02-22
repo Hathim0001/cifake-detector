@@ -1,10 +1,8 @@
 # =============================================================================
-# Phase 2 — Break: Adversarial Evasion Attacks
-# Build → Break → Improve | CIFAKE Dataset
-# Fix: blur_pgd_attack now returns [C,H,W] (not [1,C,H,W]) — consistent dims
-# =============================================================================
-
-# %% ── SECTION 1: IMPORTS ─────────────────────────────────────────────────────
+# Phase 2 Break: Adversarial Evasion Attacks
+# CIFAKE Dataset
+#
+import os
 import os
 import cv2
 import random
@@ -37,7 +35,7 @@ print(f"Device: {DEVICE}")
 
 os.makedirs("outputs/phase2", exist_ok=True)
 
-# %% ── SECTION 3: LOAD MODEL ──────────────────────────────────────────────────
+def build_model():
 def build_model():
     model    = models.resnet18(weights=None)
     in_feats = model.fc.in_features
@@ -79,12 +77,12 @@ print(f"Test set: {len(test_ds):,} images")
 # %% ── SECTION 5: HELPER FUNCTIONS ───────────────────────────────────────────
 
 def denorm(tensor):
-    """[-1,1] → [0,1] for display."""
+    """[-1,1] to [0,1] for display."""
     return (tensor * 0.5 + 0.5).clamp(0, 1)
 
 def tensor_to_uint8(tensor):
     """
-    Single image [C,H,W] → uint8 numpy [H,W,C].
+    Single image [C,H,W] to uint8 numpy [H,W,C].
     Handles both 3D [C,H,W] and 4D [1,C,H,W] tensors safely.
     """
     t = tensor.squeeze(0) if tensor.dim() == 4 else tensor
@@ -94,7 +92,7 @@ def tensor_to_uint8(tensor):
 def ensure_3d(tensor):
     """
     Ensure tensor is [C,H,W].
-    Squeezes [1,C,H,W] → [C,H,W]. Leaves [C,H,W] unchanged.
+    Squeezes [1,C,H,W] to [C,H,W]. Leaves [C,H,W] unchanged.
     """
     if tensor.dim() == 4 and tensor.shape[0] == 1:
         return tensor.squeeze(0)
@@ -103,7 +101,7 @@ def ensure_3d(tensor):
 def ensure_4d(tensor):
     """
     Ensure tensor is [1,C,H,W] for model input.
-    Unsqueezes [C,H,W] → [1,C,H,W]. Leaves [1,C,H,W] unchanged.
+    Unsqueezes [C,H,W] to [1,C,H,W]. Leaves [1,C,H,W] unchanged.
     """
     if tensor.dim() == 3:
         return tensor.unsqueeze(0)
@@ -128,7 +126,7 @@ def get_pred(model, x):
 
 # %% ── SECTION 6: SELECT HIGH-CONFIDENCE FAKE TARGETS ────────────────────────
 
-def select_targets(loader, n=10, threshold=0.90):
+def test_loader, n=10, threshold=0.90):
     """
     Collect FAKE images classified as FAKE with confidence >= threshold.
     Returns list of (img [C,H,W], true_label=1, p_fake) sorted by confidence.
@@ -147,9 +145,9 @@ def select_targets(loader, n=10, threshold=0.90):
     selected.sort(key=lambda t: t[2], reverse=True)
     selected = selected[:n]
 
-    print(f"\nSelected {len(selected)} high-confidence FAKE targets:")
+    print(f"Selected {len(selected)} high-confidence FAKE targets:")
     for idx, (_, _, conf) in enumerate(selected):
-        print(f"  Target {idx+1:02d}: P(fake) = {conf:.4f}")
+        print(f"Target {idx+1:02d}: P(fake) {conf:.4f}")
     return selected
 
 
@@ -313,7 +311,7 @@ print("\nRunning iterative evasion demo on 3 targets...")
 demo_results = []
 
 for tidx, (img, lbl, orig_conf) in enumerate(demo_targets):
-    print(f"\n  Target {tidx+1} | Original P(fake) = {orig_conf:.4f}")
+    print(f"\n  Target {tidx+1} | Original P(fake) {orig_conf:.4f}")
 
     blur_res             = run_iterative_blur(model, img)
     fgsm_res             = run_iterative_fgsm(model, img)
@@ -342,7 +340,7 @@ for tidx, (img, lbl, orig_conf) in enumerate(demo_targets):
 
     print(f"    Blur  (k=15)     : P(fake) = {blur_res[-1]['p_fake']:.4f}")
     print(f"    FGSM  (ε=0.10)   : P(fake) = {fgsm_res[-1]['p_fake']:.4f}")
-    print(f"    PGD   (ε=0.05)   : P(fake) = {pgd_pfake:.4f}")
+    print(f"  PGD   (ε=0.05)   : P(fake) = {pgd_pfake:.4f}")
     print(f"    Blur+PGD         : P(fake) = {bp_pfake:.4f}")
 
 
@@ -735,7 +733,7 @@ def run_all_attacks_full(targets):
 
 summary = run_all_attacks_full(targets)
 
-print("\n====== Attack Success Summary =====================================")
+print("\n====== Attack Success Summary")
 print(f"{'Attack':<18} {'Evaded/10':>10} {'Rate':>8} {'Avg Drop':>10}")
 print("-" * 52)
 for name, data in summary.items():

@@ -1,8 +1,3 @@
-# =============================================================================
-# Phase 1 — EVALUATION ONLY (loads saved best.pth, skips training)
-# =============================================================================
-
-# %% ── IMPORTS ────────────────────────────────────────────────────────────────
 import os
 import random
 from copy import deepcopy
@@ -25,8 +20,6 @@ from sklearn.metrics import (
     f1_score, confusion_matrix, ConfusionMatrixDisplay,
     classification_report,
 )
-
-# %% ── CONFIG ─────────────────────────────────────────────────────────────────
 SEED        = 42
 DATA_DIR    = r"D:\hackathon\data"
 BATCH_SIZE  = 32
@@ -40,19 +33,17 @@ np.random.seed(SEED)
 torch.manual_seed(SEED)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using Device : {DEVICE}")
-print(f"Loading model: {SAVE_PATH}")
+print("Using Device {DEVICE}")
+print(f"Loading model {SAVE_PATH}")
 
 os.makedirs("outputs", exist_ok=True)
 
 TRAIN_DIR = os.path.join(DATA_DIR, "train")
 TEST_DIR  = os.path.join(DATA_DIR, "test")
 
-# %% ── LABEL FLIP (named function for Windows) ────────────────────────────────
 def flip_label(y):
     return 1 - y
 
-# %% ── DATA — TEST LOADER ONLY ────────────────────────────────────────────────
 eval_transform = T.Compose([
     T.Resize((IMG_SIZE, IMG_SIZE)),
     T.ToTensor(),
@@ -68,9 +59,8 @@ test_loader = DataLoader(
 )
 print(f"Test set     : {len(test_ds):,} images")
 
-# %% ── MODEL — LOAD FROM CHECKPOINT ──────────────────────────────────────────
 def build_model():
-    model = models.resnet18(weights=None)   # no download needed
+    model = models.resnet18(weights=None)
     in_feats = model.fc.in_features
     model.fc = nn.Sequential(
         nn.Dropout(p=0.3),
@@ -86,7 +76,6 @@ model.load_state_dict(torch.load(SAVE_PATH, map_location=DEVICE))
 model.eval()
 print("Model loaded successfully from checkpoint.\n")
 
-# %% ── HELPER: DENORMALIZE ─────────────────────────────────────────────────────
 def denorm(tensor):
     return (tensor * 0.5 + 0.5).clamp(0, 1)
 
@@ -101,7 +90,6 @@ def collect_samples(loader, label_filter=None, n=6):
                 return imgs_out, lbls_out
     return imgs_out, lbls_out
 
-# %% ── EVALUATION ─────────────────────────────────────────────────────────────
 all_preds, all_labels, all_probs = [], [], []
 
 with torch.no_grad():
@@ -125,25 +113,23 @@ rec  = recall_score   (all_labels, all_preds, pos_label=1, zero_division=0)
 f1   = f1_score       (all_labels, all_preds, pos_label=1, zero_division=0)
 cm   = confusion_matrix(all_labels, all_preds)
 
-print("\n====== Test Set Metrics ============================================")
-print(f"  Accuracy  : {acc:.4f}  ({acc * 100:.2f}%)")
-print(f"  Precision : {prec:.4f}")
-print(f"  Recall    : {rec:.4f}")
-print(f"  F1 Score  : {f1:.4f}")
-print("\n  Full Classification Report:")
+print("Test Set Metrics")
+print(f"Accuracy: {acc:.4f} ({acc * 100:.2f}%)")
+print(f"Precision: {prec:.4f}")
+print(f"Recall: {rec:.4f}")
+print(f"F1 Score: {f1:.4f}")
+print("Full Classification Report:")
 print(classification_report(all_labels, all_preds, target_names=CLASS_NAMES))
 
-# Confusion Matrix
 fig, ax = plt.subplots(figsize=(5, 4))
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=CLASS_NAMES)
 disp.plot(ax=ax, colorbar=False, cmap="Blues")
-ax.set_title("Confusion Matrix — Test Set", fontsize=12, fontweight="bold")
+ax.set_title("Confusion Matrix Test Set", fontsize=12, fontweight="bold")
 plt.tight_layout()
 plt.savefig("outputs/confusion_matrix.png", dpi=150)
 plt.show()
 print("Saved: outputs/confusion_matrix.png")
 
-# %% ── GRAD-CAM ───────────────────────────────────────────────────────────────
 class GradCAM:
     def __init__(self, model, target_layer):
         self.model       = model
@@ -196,8 +182,8 @@ def visualize_gradcam(loader, n=6, label_filter=None, save_tag="gradcam"):
         heatmap   = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
         heatmap   = cv2.resize(heatmap, (img_uint8.shape[1], img_uint8.shape[0]))
         overlay   = cv2.addWeighted(img_uint8, 0.55, heatmap, 0.45, 0)
-        row_lbl   = (f"True: {CLASS_NAMES[c_lbls[i]]} | "
-                     f"Pred: {CLASS_NAMES[pred_idx]} | "
+        row_lbl   = (f"True: {CLASS_NAMES[c_lbls[i]]} "
+                     f"Pred: {CLASS_NAMES[pred_idx]} "
                      f"P(fake)={probs[1]:.3f}")
         axes[i][0].imshow(img_disp);         axes[i][0].axis("off")
         axes[i][1].imshow(heatmap / 255.0);  axes[i][1].axis("off")
@@ -211,13 +197,11 @@ def visualize_gradcam(loader, n=6, label_filter=None, save_tag="gradcam"):
     plt.show()
     print(f"Saved: outputs/{save_tag}.png")
 
-
-print("\nGenerating Grad-CAM for FAKE images...")
+print("Generating Grad-CAM for FAKE images...")
 visualize_gradcam(test_loader, n=6, label_filter=1, save_tag="gradcam_fake")
 print("Generating Grad-CAM for REAL images...")
 visualize_gradcam(test_loader, n=6, label_filter=0, save_tag="gradcam_real")
 
-# %% ── SALIENCY MAPS ──────────────────────────────────────────────────────────
 def compute_saliency(model, img_tensor):
     model.eval()
     x = img_tensor.to(DEVICE).requires_grad_(True)
@@ -244,7 +228,7 @@ def visualize_saliency(loader, n=6, label_filter=None, save_tag="saliency"):
         sal_color = cv2.cvtColor(sal_color, cv2.COLOR_BGR2RGB)
         sal_color = cv2.resize(sal_color, (img_uint8.shape[1], img_uint8.shape[0]))
         blended   = cv2.addWeighted(img_uint8, 0.6, sal_color, 0.4, 0)
-        row_lbl   = (f"True: {CLASS_NAMES[c_lbls[i]]} | "
+        row_lbl   = (f"True: {CLASS_NAMES[c_lbls[i]]} "
                      f"Pred: {CLASS_NAMES[pred_idx]}")
         axes[i][0].imshow(img_disp);              axes[i][0].axis("off")
         axes[i][1].imshow(saliency, cmap="hot");  axes[i][1].axis("off")
@@ -252,26 +236,24 @@ def visualize_saliency(loader, n=6, label_filter=None, save_tag="saliency"):
         axes[i][0].set_ylabel(row_lbl, fontsize=8, rotation=0,
                                labelpad=140, va="center")
 
-    plt.suptitle("Saliency Maps — Pixel-Level Sensitivity",
+    plt.suptitle("Saliency Maps Pixel-Level Sensitivity",
                  fontsize=13, fontweight="bold")
     plt.tight_layout()
     plt.savefig(f"outputs/{save_tag}.png", dpi=150)
     plt.show()
     print(f"Saved: outputs/{save_tag}.png")
 
-
-print("\nGenerating Saliency Maps for FAKE images...")
+print("Generating Saliency Maps for FAKE images...")
 visualize_saliency(test_loader, n=6, label_filter=1, save_tag="saliency_fake")
 print("Generating Saliency Maps for REAL images...")
 visualize_saliency(test_loader, n=6, label_filter=0, save_tag="saliency_real")
 
-# %% ── FINAL SUMMARY ──────────────────────────────────────────────────────────
-print("\n====== PHASE 1 COMPLETE ============================================")
-print(f"  Accuracy  : {acc:.4f}  ({acc * 100:.2f}%)")
-print(f"  Precision : {prec:.4f}")
-print(f"  Recall    : {rec:.4f}")
-print(f"  F1 Score  : {f1:.4f}")
-print(f"\n  Checkpoint : {SAVE_PATH}")
-print("\n  Output files:")
+print("PHASE 1 COMPLETE")
+print(f"Accuracy: {acc:.4f} ({acc * 100:.2f}%)")
+print(f"Precision: {prec:.4f}")
+print(f"Recall: {rec:.4f}")
+print(f"F1 Score: {f1:.4f}")
+print(f"Checkpoint : {SAVE_PATH}")
+print("Output files:")
 for fname in sorted(os.listdir("outputs")):
-    print(f"    outputs/{fname}")
+    print(f"outputs/{fname}")
