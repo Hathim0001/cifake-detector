@@ -1,5 +1,3 @@
-Here is the complete `README.md` — copy everything between the triple backticks into your file:
-
 ```markdown
 # Build → Break → Improve: Navigating Synthetic Reality
 
